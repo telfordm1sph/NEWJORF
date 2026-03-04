@@ -1,16 +1,18 @@
 import { usePage } from "@inertiajs/react";
 import SidebarLink from "@/Components/sidebar/SidebarLink";
-
-import { ClipboardList, FileText, Table2, Box, Layers } from "lucide-react";
-import Dropdown from "./DropDown";
+import { FileText } from "lucide-react";
 
 export default function NavLinks({ isSidebarOpen }) {
     const { emp_data } = usePage().props;
 
     return (
-        <nav
-            className="flex flex-col flex-grow space-y-1 overflow-y-auto"
-            style={{ scrollbarWidth: "none" }}
-        ></nav>
+        <nav className="flex flex-col gap-0.5">
+            <SidebarLink
+                href={route("jorf.form")}
+                icon={<FileText className="w-[18px] h-[18px]" />}
+                label="Generate JORF"
+                isSidebarOpen={isSidebarOpen}
+            />
+        </nav>
     );
 }
