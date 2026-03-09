@@ -26,7 +26,13 @@ class Jorf extends Model
         'remarks',
         'status',
         'cost_amount',
+        'classification',
+        'execution_date',
+        'lead_time_value',
+        'lead_time_unit',
         'rating',
+        'incharge_id',
+        'approver_id',
         'handled_by',
         'handled_at',
     ];

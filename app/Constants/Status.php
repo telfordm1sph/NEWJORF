@@ -12,6 +12,7 @@ class Status
     const ACKNOWLEDGED = 5;
     const CANCELLED = 6;
     const DISAPPROVED = 7;
+    const RETURNED = 8;
 
     // Status labels
     const LABELS = [
@@ -22,17 +23,19 @@ class Status
         self::ACKNOWLEDGED => 'Acknowledged',
         self::CANCELLED => 'Cancelled',
         self::DISAPPROVED => 'Disapproved',
+        self::RETURNED => 'Returned',
     ];
 
     // Status colors for UI
     const COLORS = [
         self::PENDING      => 'gold',
-        self::APPROVED     => 'lime',
+        self::APPROVED     => 'blue',
         self::ONGOING      => 'blue',
         self::DONE         => 'green',
         self::ACKNOWLEDGED  => 'green',
         self::CANCELLED    => 'volcano',
         self::DISAPPROVED  => 'red',
+        self::RETURNED     => 'red',
     ];
 
 

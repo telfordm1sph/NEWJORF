@@ -9,6 +9,7 @@ use App\Repositories\JorfRepository;
 use App\Repositories\UserRepository;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 class JorfService
@@ -28,42 +29,184 @@ class JorfService
         return $this->jorfRepository->getRequestType();
     }
 
-    public function store(Request $request, array $empData): void
-    {
-        DB::transaction(function () use ($request, $empData) {
-            $employeeData = [
-                'employid'   => $empData['emp_id'] ?? $empData['EMPLOYID'] ?? null,
-                'empname'    => $empData['emp_name'] ?? $empData['EMPNAME'] ?? null,
-                'department' => $empData['emp_dept'] ?? $empData['DEPARTMENT'] ?? 'Unknown',
-                'prodline'   => $empData['emp_prodline'] ?? $empData['PRODLINE'] ?? 'Unknown',
-                'station'    => $empData['emp_station'] ?? $empData['STATION'] ?? 'Unknown',
-            ];
 
-            if (!$employeeData['employid'] || !$employeeData['empname']) {
-                throw new \InvalidArgumentException('Employee ID and Name are required.');
+    public function storeBatch(Request $request, array $empData): void
+    {
+        $employeeData = [
+            'employid'   => $empData['emp_id']      ?? $empData['EMPLOYID']   ?? null,
+            'empname'    => $empData['emp_name']     ?? $empData['EMPNAME']    ?? null,
+            'department' => $empData['emp_dept']     ?? $empData['DEPARTMENT'] ?? 'Unknown',
+            'prodline'   => $empData['emp_prodline'] ?? $empData['PRODLINE']   ?? 'Unknown',
+            'station'    => $empData['emp_station']  ?? $empData['STATION']    ?? 'Unknown',
+        ];
+
+        if (!$employeeData['employid'] || !$employeeData['empname']) {
+            throw new \InvalidArgumentException('Employee ID and Name are required.');
+        }
+
+        $entries = $request->input('entries', []);
+
+        // ── Phase 1: Store all files BEFORE the DB transaction ──────────────────
+        // We upload files first so we have their paths ready to insert.
+        // If any upload fails here, no DB writes have happened yet — clean state.
+        $uploadedPaths = [];  // track for rollback if DB transaction fails
+
+        $preparedEntries = [];
+
+        foreach ($entries as $index => $entry) {
+            $jorfNumber = $this->jorfRepository->generateJorfNumber($index); // see repository
+            $files      = $request->file("entries.{$index}.attachments", []);
+
+            $attachments = [];
+
+            foreach ($files as $file) {
+                $path = $file->store(
+                    "jorf_attachments/{$employeeData['employid']}/{$jorfNumber}",
+                    'public'
+                );
+
+                $uploadedPaths[] = $path; // track for rollback
+
+                $attachments[] = [
+                    'jorf_id'     => $jorfNumber,
+                    'file_name'   => $file->getClientOriginalName(),
+                    'file_path'   => $path,
+                    'file_size'   => $file->getSize(),
+                    'file_type'   => $file->getClientMimeType(),
+                    'uploaded_by' => $employeeData['employid'],
+                    'uploaded_at' => now(),
+                ];
             }
 
-            $jorfNumber = $this->jorfRepository->generateJorfNumber();
+            $preparedEntries[] = [
+                'jorf' => array_merge($employeeData, [
+                    'jorf_id'      => $jorfNumber,
+                    'request_type' => $entry['request_type'],
+                    'location'     => $entry['location'],
+                    'details'      => $entry['request_details'],
+                    'incharge_id'  => $entry['incharge_id'],
+                    'approver_id'  => $entry['approver_id'],
+                    'status'       => 1,
+                    'created_by'   => $employeeData['employid'],
+                ]),
+                'attachments' => $attachments,
+            ];
+        }
 
-            $jorf = $this->jorfRepository->createJorf(array_merge($employeeData, [
-                'jorf_id'      => $jorfNumber,
-                'request_type' => $request->request_type,
-                'details'      => $request->request_details,
-                'status'       => 1,
-                'created_by'   => $employeeData['employid'],
-            ]));
-            // $this->notificationService->notifyJorfAction(
-            //     $jorf,
-            //     'Created',
-            //     ['emp_id' => $employeeData['employid'], 'name' => $employeeData['empname']],
-            //     $employeeData,
-            //     ['DEPT_HEAD']
-            // );
+        // ── Phase 2: Insert everything in one DB transaction ─────────────────────
+        // If anything fails here, we roll back the DB AND delete uploaded files.
+        try {
+            DB::transaction(function () use ($preparedEntries) {
+                foreach ($preparedEntries as $prepared) {
+                    $this->jorfRepository->createJorf($prepared['jorf']);
 
-            $this->storeAttachments($request->file('attachments', []), $jorfNumber, $employeeData['employid']);
+                    foreach ($prepared['attachments'] as $attachment) {
+                        $this->jorfRepository->createAttachment($attachment);
+                    }
+                }
+            });
+        } catch (\Throwable $e) {
+            // DB failed — delete all files that were already uploaded
+            foreach ($uploadedPaths as $path) {
+                Storage::disk('public')->delete($path);
+            }
+
+            throw $e; // re-throw so the controller returns a 500
+        }
+    }
+    // public function store(Request $request, array $empData, array $entry, int $index): void
+    // {
+    //     DB::transaction(function () use ($request, $empData, $entry, $index) {
+    //         $employeeData = [
+    //             'employid'   => $empData['emp_id']       ?? $empData['EMPLOYID']   ?? null,
+    //             'empname'    => $empData['emp_name']      ?? $empData['EMPNAME']    ?? null,
+    //             'department' => $empData['emp_dept']      ?? $empData['DEPARTMENT'] ?? 'Unknown',
+    //             'prodline'   => $empData['emp_prodline']  ?? $empData['PRODLINE']   ?? 'Unknown',
+    //             'station'    => $empData['emp_station']   ?? $empData['STATION']    ?? 'Unknown',
+    //         ];
+
+    //         if (!$employeeData['employid'] || !$employeeData['empname']) {
+    //             throw new \InvalidArgumentException('Employee ID and Name are required.');
+    //         }
+
+    //         $jorfNumber = $this->jorfRepository->generateJorfNumber();
+
+    //         $jorf = $this->jorfRepository->createJorf(array_merge($employeeData, [
+    //             'jorf_id'      => $jorfNumber,
+    //             'request_type' => $entry['request_type'],
+    //             'location'     => $entry['location'],
+    //             'details'      => $entry['request_details'],
+    //             'status'       => 1,
+    //             'created_by'   => $employeeData['employid'],
+    //         ]));
+
+    //         // Get the uploaded files for this specific entry index
+    //         $attachments = $request->file("entries.{$index}.attachments") ?? [];
+
+    //         $this->storeAttachments($attachments, $jorfNumber, $employeeData['employid']);
+    //     });
+    // }
+    public function updateAlternatePersonnel(
+        string $jorfId,
+        ?string $inchargeId,
+        ?string $approverId,
+        array $empData
+    ): bool {
+        $jorf = $this->jorfRepository->getJorfById($jorfId);
+        $currentEmpId = $empData['emp_id'] ?? null;
+
+        // Check if user is authorized to update
+        $isRequestor = $jorf->employid === $currentEmpId;
+        $isAltIncharge = !empty($jorf->incharge_id) && $jorf->incharge_id === $currentEmpId;
+        $isAltApprover = !empty($jorf->approver_id) && $jorf->approver_id === $currentEmpId;
+
+        $canUpdate = $isRequestor || $isAltIncharge || $isAltApprover;
+
+        // Check role-based conditions
+        if ($jorf->status == Status::PENDING) {
+            // Can update both in pending status
+        } elseif ($jorf->status != Status::DONE) {
+            // Can only update incharge if not done
+            if (!$isRequestor && !$isAltIncharge) {
+                $canUpdate = false;
+            }
+        } else {
+            // Done status - no updates allowed
+            $canUpdate = false;
+        }
+
+        if (!$canUpdate) {
+            throw new \Exception('You are not authorized to update this JORF');
+        }
+
+        return DB::transaction(function () use ($jorf, $inchargeId, $approverId, $currentEmpId) {
+            $updateData = [];
+
+            // Prepare update data
+            if (!is_null($inchargeId)) {
+                $updateData['incharge_id'] = $inchargeId;
+            }
+
+            if (!is_null($approverId)) {
+                $updateData['approver_id'] = $approverId;
+            }
+
+            if (empty($updateData)) {
+                return false;
+            }
+
+            // Attach metadata for logging
+            $jorf->currentAction = 'UPDATE_ALTERNATE';
+            $jorf->remarks = "Updated alternate personnel: " .
+                (isset($updateData['incharge_id']) ? "incharge={$updateData['incharge_id']} " : "") .
+                (isset($updateData['approver_id']) ? "approver={$updateData['approver_id']}" : "");
+
+            // Perform the update
+            $this->jorfRepository->updateJorf($jorf, $updateData);
+
+            return true;
         });
     }
-
     protected function storeAttachments(array $attachments, string $jorfNumber, string $employeeId): void
     {
         foreach ($attachments as $file) {
@@ -129,12 +272,24 @@ class JorfService
         $countQuery->getQuery()->orders = []; // remove orderBy for count query
         $statusCounts = $this->jorfRepository->getStatusCountsFromQuery($countQuery);
 
-        // ----- Fetch all handled_by employee names in one query -----
+        // ----- Fetch all employee names (handled_by, incharge_id, approver_id) in one query -----
         $empIds = collect($paginated->items())
-            ->pluck('handled_by')
-            ->filter() // remove nulls
-            ->map(fn($ids) => explode(',', $ids)) // split comma-separated IDs
-            ->flatten()
+            ->flatMap(function ($jorf) {
+                $ids = [];
+                // Add handled_by IDs
+                if (!empty($jorf->handled_by)) {
+                    $ids = array_merge($ids, explode(',', $jorf->handled_by));
+                }
+                // Add incharge_id
+                if (!empty($jorf->incharge_id)) {
+                    $ids[] = $jorf->incharge_id;
+                }
+                // Add approver_id
+                if (!empty($jorf->approver_id)) {
+                    $ids[] = $jorf->approver_id;
+                }
+                return $ids;
+            })
             ->unique()
             ->toArray();
 
@@ -149,16 +304,25 @@ class JorfService
         $data = collect($paginated->items())->map(function ($jorf) use ($users) {
             // Map handled_by IDs to names
             $handledByNames = null;
+            $inChargeByName = null;
+            $alternateApprover = null;
             if (!empty($jorf->handled_by)) {
                 $ids = explode(',', $jorf->handled_by);
                 $handledByNames = implode('| ', array_map(fn($id) => $users[$id] ?? $id, $ids));
             }
-
+            if (!empty($jorf->incharge_id)) {
+                $inChargeByName = $users[$jorf->incharge_id] ?? $jorf->incharge_id;
+            }
+            if (!empty($jorf->approver_id)) {
+                $alternateApprover = $users[$jorf->approver_id] ?? $jorf->approver_id;
+            }
             return [
                 ...$jorf->toArray(),
                 'status_label'    => Status::getLabel($jorf->status),
                 'status_color'    => Status::getColor($jorf->status),
                 'handled_by_name' => $handledByNames,
+                'incharge_name'   => $inChargeByName,
+                'approver_name'   => $alternateApprover,
             ];
         });
 
@@ -177,49 +341,88 @@ class JorfService
         ];
     }
 
-    /**
-     * Apply role-based filters to a query.
-     */
     protected function applyRoleFilters($query, array $empData)
     {
         $currentEmpId = $empData['emp_id'] ?? null;
         $userRoles    = $empData['user_roles'] ?? '';
         $systemRoles  = $empData['system_roles'] ?? [];
 
-        // ---- Department Head ----
-        if ($userRoles === 'DEPARTMENT_HEAD' && $currentEmpId) {
+        if (!$currentEmpId) {
+            return $query->whereRaw('1 = 0');
+        }
 
-            $requestorIds = Masterlist::where(function ($q) use ($currentEmpId) {
-                $q->where('APPROVER2', $currentEmpId)
-                    ->orWhere('APPROVER3', $currentEmpId);
-            })
-                ->pluck('EMPLOYID');
+        $query->where(function ($mainQuery) use ($currentEmpId, $userRoles, $systemRoles) {
 
-            if ($requestorIds->isEmpty()) {
-                return $query->whereRaw('1 = 0');
+            /*
+        |--------------------------------------------------------------------------
+        | Requestor visibility (always allowed)
+        |--------------------------------------------------------------------------
+        */
+            $mainQuery->where('employid', $currentEmpId)
+                ->orWhere('incharge_id', $currentEmpId)
+                ->orWhere('approver_id', $currentEmpId);
+
+
+            /*
+        |--------------------------------------------------------------------------
+        | Default approver from Masterlist (no alternate approver set)
+        |--------------------------------------------------------------------------
+        */
+            $mainQuery->orWhere(function ($q) use ($currentEmpId) {
+                $q->whereNull('approver_id')
+                    ->whereIn(
+                        'employid',
+                        Masterlist::where(function ($m) use ($currentEmpId) {
+                            $m->where('APPROVER1', $currentEmpId)
+                                ->orWhere('APPROVER2', $currentEmpId)
+                                ->orWhere('APPROVER3', $currentEmpId);
+                        })->pluck('EMPLOYID')
+                    );
+            });
+
+
+            /*
+        |--------------------------------------------------------------------------
+        | Department Head
+        |--------------------------------------------------------------------------
+        */
+            if ($userRoles === 'DEPARTMENT_HEAD') {
+
+                $requestorIds = Masterlist::where(function ($q) use ($currentEmpId) {
+                    $q->where('APPROVER2', $currentEmpId)
+                        ->orWhere('APPROVER3', $currentEmpId);
+                })->pluck('EMPLOYID');
+
+                if ($requestorIds->isNotEmpty()) {
+                    $mainQuery->orWhereIn('employid', $requestorIds);
+                }
             }
 
-            return $query->whereIn('employid', $requestorIds);
-        }
-        // ---- Facilities ----
-        if (in_array('Facilities_Coordinator', $systemRoles)) {
-            return $query->where('status', '!=', 1);
-        }
-        if (in_array('Facilities', $systemRoles)) {
-            return $query
-                ->whereNotIn('status', [1, 2])
-                ->whereRaw('FIND_IN_SET(?, handled_by)', [$currentEmpId]);
-        }
+
+            /*
+        |--------------------------------------------------------------------------
+        | Facilities Coordinator (can see everything)
+        |--------------------------------------------------------------------------
+        */
+            if (in_array('Facilities_Coordinator', $systemRoles)) {
+                $mainQuery->orWhereRaw('1 = 1');
+            }
 
 
-        // ---- Requestor (OWN records only) ----
-        if ($currentEmpId) {
-            return $query->where('employid', $currentEmpId);
-        }
+            /*
+        |--------------------------------------------------------------------------
+        | Facilities Staff
+        |--------------------------------------------------------------------------
+        */
+            if (in_array('Facilities', $systemRoles)) {
+                $mainQuery->orWhere(function ($q) use ($currentEmpId) {
+                    $q->whereNotIn('status', [1, 2])
+                        ->whereRaw('FIND_IN_SET(?, handled_by)', [$currentEmpId]);
+                });
+            }
+        });
 
-
-        // ---- Default (others) ----
-        return $query->whereRaw('1 = 0');
+        return $query;
     }
 
     public function getAttachments(string $jorfId): array
@@ -272,10 +475,15 @@ class JorfService
 
         $actions = [];
 
-        // Check if user is the requestor
+        // Check if user is the requestor or alternate incharge
         $isRequestor = $jorf->employid === $currentEmpId;
+        $isAltIncharge = !empty($jorf->incharge_id) && $jorf->incharge_id === $currentEmpId;
+        $canActAsRequestor = $isRequestor || $isAltIncharge;
 
-        // Check if user is the department head of this requestor
+        // Check if user is the alternate approver
+        $isAltApprover = !empty($jorf->approver_id) && $jorf->approver_id === $currentEmpId;
+
+        // Check if user is the department head of this requestor (default approver)
         $isDepartmentHead = false;
         if ($userRoles === 'DEPARTMENT_HEAD') {
             $requestorIds = Masterlist::where('APPROVER2', $currentEmpId)
@@ -284,69 +492,79 @@ class JorfService
             $isDepartmentHead = $requestorIds->contains($jorf->employid);
         }
 
-        // Requestor actions
-        if ($isRequestor) {
+        // If alternate approver is set, only they can approve — not the default dept head
+        // If no alternate approver, fall back to department head
+        $canApprove = $isAltApprover || ($isDepartmentHead && empty($jorf->approver));
+
+        // Requestor / Alternate Incharge actions
+        if ($canActAsRequestor) {
             if ($status == Status::PENDING) {
-                // $actions[] = 'edit';
                 $actions[] = 'CANCEL';
             }
         }
 
-        // Department Head actions
-        if ($isDepartmentHead) {
+        // Approver actions (alternate approver OR default dept head)
+        if ($canApprove && !$canActAsRequestor) {
             if ($status == Status::PENDING) {
-                // Don't allow dept head to approve their own request
-                if (!$isRequestor) {
-                    $actions[] = 'APPROVE';
-                    $actions[] = 'DISAPPROVE';
-                }
+                $actions[] = 'APPROVE';
+                $actions[] = 'DISAPPROVE';
             }
         }
 
-        if ($systemRoles && in_array('Facilities_Coordinator', $systemRoles) && !$isRequestor) {
-            // Facilities actions
+        // Facilities Coordinator actions
+        if ($systemRoles && in_array('Facilities_Coordinator', $systemRoles) && !$canActAsRequestor) {
             if (in_array($status, [Status::APPROVED])) {
                 $actions[] = 'ONGOING';
-                // $actions[] = 'DONE';
                 $actions[] = 'CANCEL';
             } elseif (in_array($status, [Status::ONGOING])) {
                 $actions[] = 'ONGOING';
                 $actions[] = 'DONE';
+            } elseif (in_array($status, [Status::RETURNED])) {
+                $actions[] = 'ONGOING';
+                $actions[] = 'DONE';
             }
         }
-        if ($systemRoles && in_array('Facilities', $systemRoles) && !$isRequestor) {
-            // Facilities Coordinator actions
+
+        // Facilities actions
+        if ($systemRoles && in_array('Facilities', $systemRoles) && !$canActAsRequestor) {
             if (in_array($status, [Status::ONGOING])) {
                 $actions[] = 'DONE';
             } else {
                 $actions[] = 'VIEW';
             }
         }
-        if ($isRequestor && in_array($status, [Status::DONE])) {
+
+        // Acknowledge — requestor or alternate incharge once DONE
+        if ($canActAsRequestor && in_array($status, [Status::DONE])) {
             $actions[] = 'ACKNOWLEDGE';
+            $actions[] = 'RETURN';
         }
-        // Add view for anyone who has access
-        if ($isRequestor || $isDepartmentHead) {
+
+        // VIEW — anyone with a role on this JORF
+        if ($canActAsRequestor || $canApprove || $isDepartmentHead) {
             $actions[] = 'VIEW';
         }
 
-        // Remove duplicates and return
         return array_values(array_unique($actions));
     }
     public function jorfAction(
         string $jorfId,
         string $userId,
-        string $actionType = 'APPROVE',
-        string $remarks = '',
-        ?int $costAmount = null,
-        ?float $rating = null,
-        ?array $handledBy = null
-
+        array $data  // Receive all data as one array
     ): bool {
-        $actionType = strtoupper($actionType);
+        // Extract data with defaults
+        $actionType = strtoupper($data['action'] ?? 'APPROVE');
+        $remarks = $data['remarks'] ?? '';
+        $costAmount = $data['cost_amount'] ?? null;
+        $rating = $data['rating'] ?? null;
+        $handledBy = $data['handled_by'] ?? [];
+        $classification = $data['classification'] ?? null;
+        $executionDate = $data['execution_date'] ?? null;
+        $leadTimeValue = $data['lead_time_value'] ?? null;
+        $leadTimeUnit = $data['lead_time_unit'] ?? null;
 
         // Only allow valid actions
-        if (!in_array($actionType, ['APPROVE', 'DISAPPROVE', 'ONGOING', 'DONE', 'CANCEL', 'ACKNOWLEDGE'])) {
+        if (!in_array($actionType, ['APPROVE', 'DISAPPROVE', 'ONGOING', 'DONE', 'CANCEL', 'ACKNOWLEDGE', 'RETURN'])) {
             throw new \InvalidArgumentException('Invalid action type');
         }
 
@@ -355,8 +573,7 @@ class JorfService
             throw new \InvalidArgumentException('Remarks are required for this action.');
         }
 
-        return DB::transaction(function () use ($jorfId, $userId, $actionType, $remarks, $costAmount, $rating, $handledBy) {
-
+        return DB::transaction(function () use ($jorfId, $userId, $actionType, $remarks, $costAmount, $rating, $handledBy, $classification, $executionDate, $leadTimeValue, $leadTimeUnit) {
             $jorf = $this->jorfRepository->getJorfById($jorfId);
             if (!$jorf) return false;
 
@@ -368,29 +585,43 @@ class JorfService
                 'ACKNOWLEDGE' => 5,
                 'CANCEL'     => 6,
                 'DISAPPROVE' => 7,
+                'RETURN'     => 8,
             ];
 
             $newStatus = $statusMap[$actionType] ?? null;
-            $updateData = [
-                'status' => $newStatus,
-            ];
+            $updateData = ['status' => $newStatus];
+
             if (is_null($newStatus)) {
                 throw new \InvalidArgumentException("No status mapping found for action $actionType");
             }
 
             if ($actionType === 'ONGOING' || $actionType === 'DONE') {
+                // only record these when facilities are actually doing work
+                if (!is_null($classification)) {
+                    $updateData['classification'] = $classification;
+                }
+                if (!is_null($executionDate)) {
+                    $updateData['execution_date'] = $executionDate;
+                }
+                if (!is_null($leadTimeValue)) {
+                    $updateData['lead_time_value'] = $leadTimeValue;
+                }
+                if (!is_null($leadTimeUnit)) {
+                    $updateData['lead_time_unit'] = $leadTimeUnit;
+                }
+
+
                 if (!is_null($costAmount)) $updateData['cost_amount'] = $costAmount;
-
-                if (!is_null($handledBy) && !empty($handledBy)) {
-
+                if (!empty($handledBy)) {
                     $updateData['handled_by'] = implode(',', $handledBy);
                     $updateData['handled_at'] = now();
                 }
             }
-            if ($actionType === 'ACKNOWLEDGE') {
-                if (!is_null($rating)) $updateData['rating'] = $rating;
+
+            if ($actionType === 'ACKNOWLEDGE' && !is_null($rating)) {
+                $updateData['rating'] = $rating;
             }
-            // dd($updateData);
+
             // Attach in-memory properties for logging
             $jorf->currentAction = $actionType;
             $jorf->remarks = $remarks;

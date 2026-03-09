@@ -24,26 +24,33 @@ class JorfController extends Controller
     {
         $requestType = $this->jorfService->getRequestType();
 
-        return Inertia::render('Jorf/Form', [
+        return Inertia::render('Jorf/Index', [
             'requestType' => $requestType,
         ]);
     }
 
     public function store(Request $request)
     {
+        // dd($request->all());
         $request->validate([
-            'request_type' => 'required',
-            'request_details' => 'required',
-            'attachments.*' => 'file|max:10240',
+            'entries'                   => 'required|array|min:1',
+            'entries.*.request_type'    => 'required|string',
+            'entries.*.location'        => 'required|string',
+            'entries.*.request_details' => 'required|string',
+            'entries.*.attachments'     => 'required|array|min:1',
+            'entries.*.attachments.*'   => 'file|max:10240',
+            'entries.*.incharge_id'     => 'required|string',
+            'entries.*.approver_id'     => 'required|string',
         ]);
 
         $empData = session('emp_data');
 
-        $this->jorfService->store($request, $empData);
+        $this->jorfService->storeBatch($request, $empData);
 
-        return redirect()->back()->with('success', 'JORF created successfully.');
+        return response()->json([
+            'message' => 'JORF(s) created successfully.',
+        ]);
     }
-
     public function getJorfTable(Request $request)
     {
         $empData = session('emp_data');
@@ -70,6 +77,37 @@ class JorfController extends Controller
             'filters' => $result['filters'],
         ]);
     }
+    public function updateAlternate(Request $request)
+    {
+        dd($request->all());
+        $validated = $request->validate([
+            'jorf_id' => 'required|string',
+            'incharge_id' => 'nullable|string',
+            'approver_id' => 'nullable|string',
+        ]);
+
+        $empData = session('emp_data');
+
+        $result = $this->jorfService->updateAlternatePersonnel(
+            $validated['jorf_id'],
+            $validated['incharge_id'],
+            $validated['approver_id'],
+            $empData
+        );
+
+        if ($result) {
+            return response()->json([
+                'success' => true,
+                'message' => 'Alternate personnel updated successfully.'
+            ]);
+        }
+
+        return response()->json([
+            'success' => false,
+            'message' => 'Failed to update alternate personnel.'
+        ], 400);
+    }
+
     /**
      * Get attachments for a specific JORF
      */
@@ -131,35 +169,37 @@ class JorfController extends Controller
     }
     public function jorfAction(Request $request)
     {
-        // dd($request->all());
-        $empData = session('emp_data');
-        $jorfId = $request->input('jorf_id');
-        $remarks = $request->input('remarks');
-        $costAmount = $request->input('cost_amount', null);
-        $rating = $request->input('rating', null);
-        $actionType = strtoupper($request->input('action'));
-        $handledBy = $request->input('handled_by', []);
-
-        $request->merge([
-            'action' => $actionType
-        ]);
-
-        $request->validate([
-            'jorf_id' => 'required|string',
-            'action' => 'required|string|in:APPROVE,DISAPPROVE,ONGOING,DONE,CANCEL,ACKNOWLEDGE',
-            'remarks' => 'nullable|string',
-            'cost_amount' => 'nullable|numeric|min:0',
-            'rating' => 'nullable|numeric|min:0|max:5',
-            'handled_by' => 'nullable|array',
-            'handled_by.*' => 'integer',
-        ]);
-
         try {
-            $success = $this->jorfService->jorfAction($jorfId, $empData['emp_id'], $actionType, $remarks, $costAmount, $rating, $handledBy);
+            // dd($request->all());
+            // Validate all at once and get validated data
+            $validated = $request->validate([
+                'jorf_id' => 'required|string',
+                'action' => 'required|string|in:APPROVE,DISAPPROVE,ONGOING,DONE,CANCEL,ACKNOWLEDGE,RETURN',
+                'classification' => 'nullable|string|in:minor,major,critical',
+                'execution_date' => 'nullable|date',
+                'lead_time_value' => 'nullable|string',
+                'lead_time_unit' => 'nullable|string',
+                'remarks' => 'nullable|string',
+                'cost_amount' => 'nullable|numeric|min:0',
+                'rating' => 'nullable|numeric|min:0|max:5',
+                'handled_by' => 'nullable|array',
+                'handled_by.*' => 'integer',
+            ]);
+
+            // Get emp data from session
+            $empData = session('emp_data');
+
+            // Pass all validated data directly to service
+            $success = $this->jorfService->jorfAction(
+                $validated['jorf_id'],
+                $empData['emp_id'],
+                $validated
+            );
+
             if ($success) {
                 return response()->json([
                     'success' => true,
-                    'message' => "Jorf {$actionType} successfully."
+                    'message' => "Jorf {$validated['action']} successfully."
                 ]);
             }
 
@@ -193,15 +233,7 @@ class JorfController extends Controller
             abort(404, 'Attachment not found');
         }
     }
-    public function getFacilitiesEmployees()
-    {
-        $employees = $this->userRoleService->getFacilitiesEmployees();
 
-        return response()->json([
-            'success' => true,
-            'employees' => $employees,
-        ]);
-    }
     /**
      * Helper to decode base64 JSON filters
      */

@@ -21,14 +21,14 @@ const SidebarLink = ({
                 "text-sm font-medium transition-all duration-200",
 
                 /* Default */
-                "text-zinc-400 hover:text-white",
+                "text-muted-foreground hover:text-foreground",
 
                 /* Hover background */
-                "hover:bg-zinc-800",
+                "hover:bg-accent",
 
                 /* Active */
                 isActive
-                    ? "bg-amber-500/15 text-amber-400 border border-amber-500/20"
+                    ? "bg-primary/10 text-primary border border-primary/20"
                     : "border border-transparent",
 
                 !isSidebarOpen && "justify-center px-0 mx-2",
@@ -37,8 +37,10 @@ const SidebarLink = ({
             {/* Active left accent bar */}
             {isActive && (
                 <span
-                    className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 rounded-full bg-amber-400"
-                    style={{ boxShadow: "0 0 8px 1px rgba(251,191,36,0.5)" }}
+                    className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 rounded-full bg-primary"
+                    style={{
+                        boxShadow: "0 0 8px 1px hsl(var(--primary) / 0.5)",
+                    }}
                 />
             )}
 
@@ -47,8 +49,8 @@ const SidebarLink = ({
                 className={cn(
                     "flex-shrink-0 w-[18px] h-[18px] flex items-center justify-center transition-colors",
                     isActive
-                        ? "text-amber-400"
-                        : "text-zinc-500 group-hover:text-zinc-200",
+                        ? "text-primary"
+                        : "text-muted-foreground group-hover:text-foreground",
                 )}
             >
                 {icon}
@@ -62,7 +64,7 @@ const SidebarLink = ({
                 <span
                     className={cn(
                         "text-[10px] px-1.5 py-0.5 rounded-md font-semibold leading-none",
-                        "bg-red-500/20 text-red-400 border border-red-500/30",
+                        "bg-destructive/20 text-destructive border border-destructive/30",
                         isSidebarOpen ? "ml-auto" : "absolute -top-1 -right-1",
                     )}
                 >

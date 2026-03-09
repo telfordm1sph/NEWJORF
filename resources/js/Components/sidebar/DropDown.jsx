@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { usePage, Link } from "@inertiajs/react";
-import { ChevronDown, ChevronRight, ChevronUp } from "lucide-react";
+import { ChevronDown, ChevronRight } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 export default function Dropdown({
     label,
@@ -8,7 +9,6 @@ export default function Dropdown({
     links = [],
     notification = null,
     isSidebarOpen = false,
-    activeColor = "#1890ff", // primary color
 }) {
     const { url } = usePage();
 
@@ -40,32 +40,53 @@ export default function Dropdown({
             {/* Parent button */}
             <button
                 onClick={() => setOpen(!open)}
-                className={`relative flex items-center justify-between w-full px-4 py-2 rounded-md transition-colors duration-200 ${
+                className={cn(
+                    "relative flex items-center justify-between w-full px-3 py-2.5 mx-2 rounded-xl",
+                    "text-sm font-medium transition-all duration-200",
+                    "text-muted-foreground hover:text-foreground hover:bg-accent",
                     parentActive
-                        ? "bg-gray-800 font-semibold"
-                        : "hover:bg-gray-700"
-                }`}
+                        ? "bg-primary/10 text-primary border border-primary/20 font-semibold"
+                        : "border border-transparent",
+                    !isSidebarOpen && "justify-center px-0",
+                )}
                 style={{
-                    borderLeft: parentActive
-                        ? `4px solid ${activeColor}`
-                        : "4px solid transparent",
+                    width: isSidebarOpen ? "calc(100% - 1rem)" : undefined,
                 }}
             >
-                <div className="flex items-center space-x-3">
-                    {icon && <span className="text-gray-200">{icon}</span>}
-                    {isSidebarOpen && (
-                        <span className="text-sm text-gray-200">{label}</span>
+                {/* Active left accent bar */}
+                {parentActive && (
+                    <span
+                        className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 rounded-full bg-primary"
+                        style={{
+                            boxShadow: "0 0 8px 1px hsl(var(--primary) / 0.5)",
+                        }}
+                    />
+                )}
+
+                <div className="flex items-center gap-3">
+                    {icon && (
+                        <span
+                            className={cn(
+                                "flex-shrink-0 w-[18px] h-[18px] flex items-center justify-center transition-colors",
+                                parentActive
+                                    ? "text-primary"
+                                    : "text-muted-foreground group-hover:text-foreground",
+                            )}
+                        >
+                            {icon}
+                        </span>
                     )}
+                    {isSidebarOpen && <span className="truncate">{label}</span>}
                 </div>
 
                 {isSidebarOpen && (
-                    <div className="flex items-center space-x-2">
+                    <div className="flex items-center gap-2">
                         {notification && typeof notification === "number" && (
-                            <span className="bg-red-600 text-white text-xs font-bold px-2 py-0.5 rounded-full">
+                            <span className="bg-destructive/20 text-destructive border border-destructive/30 text-[10px] px-1.5 py-0.5 rounded-md font-semibold leading-none">
                                 {notification > 99 ? "99+" : notification}
                             </span>
                         )}
-                        <span className="text-gray-200">
+                        <span className="text-muted-foreground">
                             {open ? (
                                 <ChevronDown className="w-4 h-4" />
                             ) : (
@@ -78,9 +99,9 @@ export default function Dropdown({
 
             {/* Child links */}
             {isSidebarOpen && open && (
-                <div className="relative mt-1 space-y-1 pl-4">
-                    {/* vertical line */}
-                    <div className="absolute left-2 top-2 bottom-2 w-[2px] bg-gray-600 rounded" />
+                <div className="relative mt-1 space-y-1 pl-4 mx-2">
+                    {/* Vertical line */}
+                    <div className="absolute left-2 top-2 bottom-2 w-[2px] bg-border rounded" />
 
                     {links.map((link, idx) => {
                         const active = isActiveLink(link.href);
@@ -88,36 +109,31 @@ export default function Dropdown({
                             <Link
                                 key={idx}
                                 href={link.href}
-                                className={`relative flex items-center justify-start w-full pl-6 pr-4 py-2 rounded-md transition-colors duration-200 ${
+                                className={cn(
+                                    "relative flex items-center w-full pl-6 pr-4 py-2 rounded-xl",
+                                    "text-xs font-medium transition-all duration-200",
                                     active
-                                        ? "bg-gray-800 font-semibold"
-                                        : "hover:bg-gray-700"
-                                }`}
+                                        ? "bg-primary/10 text-primary font-semibold"
+                                        : "text-muted-foreground hover:text-foreground hover:bg-accent",
+                                )}
                             >
-                                {/* Dot indicator on the vertical line */}
+                                {/* Dot indicator */}
                                 <span
-                                    className="absolute left-[3px] top-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full border-2 transition-colors duration-200"
-                                    style={{
-                                        backgroundColor: active
-                                            ? activeColor
-                                            : "#4B5563",
-                                        borderColor: active
-                                            ? activeColor
-                                            : "#6B7280",
-                                    }}
+                                    className={cn(
+                                        "absolute left-[3px] top-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full border-2 transition-colors duration-200",
+                                        active
+                                            ? "bg-primary border-primary"
+                                            : "bg-muted border-muted-foreground/40",
+                                    )}
                                 />
 
                                 {link.icon && (
-                                    <span className="mr-2 text-gray-200">
-                                        {link.icon}
-                                    </span>
+                                    <span className="mr-2">{link.icon}</span>
                                 )}
-                                <span className="text-xs text-gray-200">
-                                    {link.label}
-                                </span>
+                                <span className="truncate">{link.label}</span>
                                 {link.notification &&
                                     typeof link.notification === "number" && (
-                                        <span className="ml-auto bg-red-600 text-white text-xs px-2 py-0.5 rounded-full">
+                                        <span className="ml-auto bg-destructive/20 text-destructive border border-destructive/30 text-[10px] px-1.5 py-0.5 rounded-md font-semibold leading-none">
                                             {link.notification > 99
                                                 ? "99+"
                                                 : link.notification}

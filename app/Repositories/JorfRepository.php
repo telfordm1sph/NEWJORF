@@ -23,6 +23,8 @@ class JorfRepository
         return RequestType::all();
     }
 
+
+
     public function createJorf(array $data)
     {
         return Jorf::create($data);
@@ -33,16 +35,32 @@ class JorfRepository
         return JorfAttachments::create($data);
     }
 
-    public function generateJorfNumber(): string
+    /**
+     * Generate a unique JORF number.
+     *
+     * $offset is used when generating numbers for multiple entries in the same
+     * batch — it ensures each entry in the loop gets a unique number even before
+     * any of them are committed to the DB.
+     *
+     * Example: if the last saved JORF is JORF-2025-003
+     *   entry 0 → JORF-2025-004 (offset 0)
+     *   entry 1 → JORF-2025-005 (offset 1)
+     *   entry 2 → JORF-2025-006 (offset 2)
+     */
+    public function generateJorfNumber(int $offset = 0): string
     {
-        $year = date('Y');
+        $year   = date('Y');
         $prefix = "JORF-{$year}-";
 
         $lastJorf = Jorf::where('jorf_id', 'like', "{$prefix}%")
             ->orderBy('jorf_id', 'desc')
             ->first();
 
-        $newNumber = $lastJorf ? ((int) substr($lastJorf->jorf_id, -3)) + 1 : 1;
+        $lastNumber = $lastJorf
+            ? (int) substr($lastJorf->jorf_id, -3)
+            : 0;
+
+        $newNumber = $lastNumber + 1 + $offset;
 
         return $prefix . str_pad($newNumber, 3, '0', STR_PAD_LEFT);
     }
@@ -108,12 +126,16 @@ class JorfRepository
             'color' => 'default',
         ];
 
+        // Add regular statuses
         foreach (Status::LABELS as $value => $label) {
             $result[$label] = [
                 'count' => $statusCounts[$value] ?? 0,
                 'color' => Status::COLORS[$value] ?? 'default',
             ];
         }
+
+        // Note: Critical count will be added in the controller
+        // since it needs to be calculated dynamically
 
         return $result;
     }

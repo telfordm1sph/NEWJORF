@@ -69,4 +69,26 @@ class UserRepository
             ->get()
             ->toArray();
     }
+    public function getApproversById(string $empId): ?object
+    {
+        return Masterlist::where('EMPLOYID', $empId)
+            ->select(['APPROVER1', 'APPROVER2', 'APPROVER3'])
+            ->first();
+    }
+
+    public function getAvailableApproversAndRequestors(array $excludedIds = []): array
+    {
+        return Masterlist::where('ACCSTATUS', '1')
+            ->whereNotIn('EMPPOSITION', [0, 1, 6])
+            ->when(!empty($excludedIds), fn($q) => $q->whereNotIn('EMPLOYID', $excludedIds))
+            ->select([
+                'EMPLOYID as emp_id',
+                'EMPNAME as empname',
+                'DEPARTMENT as department',
+                'PRODLINE as prodline',
+                'STATION as station',
+            ])
+            ->get()
+            ->toArray();
+    }
 }

@@ -1,0 +1,26 @@
+export const COLOR_CLASS_MAP = {
+    blue: "bg-blue-50 text-blue-700 border-blue-200",
+    green: "bg-emerald-50 text-emerald-700 border-emerald-200",
+    red: "bg-red-50 text-red-700 border-red-200",
+    orange: "bg-orange-50 text-orange-700 border-orange-200",
+    gray: "bg-gray-50 text-gray-600 border-gray-200",
+    purple: "bg-purple-50 text-purple-700 border-purple-200",
+    gold: "bg-amber-50 text-amber-700 border-amber-200",
+    cyan: "bg-cyan-50 text-cyan-700 border-cyan-200",
+    lime: "bg-lime-50 text-lime-700 border-lime-200",
+    volcano: "bg-orange-50 text-orange-700 border-orange-200",
+    default: "bg-muted text-muted-foreground border-border",
+};
+export const DOT_COLOR_MAP = {
+    blue: "bg-blue-500",
+    green: "bg-emerald-500",
+    red: "bg-red-500",
+    orange: "bg-orange-500",
+    gray: "bg-gray-400",
+    purple: "bg-purple-500",
+    gold: "bg-amber-500",
+    cyan: "bg-cyan-500",
+    lime: "bg-lime-500",
+    volcano: "bg-orange-600",
+    default: "bg-muted-foreground",
+};
