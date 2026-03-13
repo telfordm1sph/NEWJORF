@@ -1,4 +1,3 @@
-// resources/js/Pages/Jorf/Index.jsx
 import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout";
 import React, { useState } from "react";
 import { Head, usePage } from "@inertiajs/react";

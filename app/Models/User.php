@@ -62,4 +62,19 @@ class User extends Authenticatable
             ->whereNull('read_at')
             ->count();
     }
+     public static function getUserOptions(): Collection
+    {
+        return collect(
+            self::where('ACCSTATUS', 1)
+                ->orderBy('EMPNAME')
+                ->get(['EMPLOYID', 'EMPNAME', 'DEPARTMENT', 'PRODLINE', 'STATION'])
+                ->toArray()
+        )->map(fn($user) => [
+            'EMPLOYID' => $user['EMPLOYID'],
+            'EMPNAME'  => $user['EMPNAME'],
+            'DEPARTMENT' => $user['DEPARTMENT'],
+            'PRODLINE' => $user['PRODLINE'],
+            'STATION' => $user['STATION'],
+        ]);
+    }
 }

@@ -12,15 +12,19 @@ use Inertia\Inertia;
 class AuthMiddleware
 {
     protected UserRoleService $userRoleService;
+
     public function __construct(UserRoleService $userRoleService)
     {
         $this->userRoleService = $userRoleService;
     }
+
     public function handle(Request $request, Closure $next)
     {
+        $cookieName = env('SSO_COOKIE_NAME', 'sso_token');
+
         // 1️⃣ Get token sources (priority: query → cookie → session)
         $tokenFromQuery   = $request->query('key');
-        $tokenFromCookie  = $request->cookie('sso_token');
+        $tokenFromCookie  = $request->cookie($cookieName);
         $tokenFromSession = session('emp_data.token');
 
         $token = $tokenFromQuery ?? $tokenFromCookie ?? $tokenFromSession;
@@ -37,14 +41,12 @@ class AuthMiddleware
             return $this->redirectToLogin($request);
         }
 
-        // 3️⃣ Session already exists AND token matches → trust it
-        if (
-            session()->has('emp_data') &&
-            session('emp_data.token') === $token
-        ) {
+        // 3️⃣ Session already exists AND token matches → verify DB then trust it
+        if (session()->has('emp_data') && session('emp_data.token') === $token) {
             // Clean URL if token came from query
             if ($tokenFromQuery) {
-                return redirect($request->url());
+                $cookie = cookie($cookieName, $token, 60 * 24 * 7);
+                return redirect($request->url())->withCookie($cookie);
             }
 
             return $next($request);
@@ -58,8 +60,11 @@ class AuthMiddleware
 
         if (!$currentUser) {
             session()->forget('emp_data');
-            return $this->redirectToLogin($request);
+            // Clear this system's own cookie only
+            $expiredCookie = cookie()->forget($cookieName);
+            return $this->redirectToLogin($request)->withCookie($expiredCookie);
         }
+
         $canAccess = $currentUser->emp_position >= 2
             || stripos($currentUser->emp_dept, 'Facilities') !== false;
 
@@ -67,38 +72,26 @@ class AuthMiddleware
             session()->forget('emp_data');
             session()->flush();
             $redirectUrl = urlencode(route('dashboard'));
-            $authifyUrl = "https://192.168.1.27:8080/authify/public/logout?redirect={$redirectUrl}";
+            $authifyUrl  = "http://192.168.1.27:8080/authify/public/logout?token={$token}&redirect={$redirectUrl}";
             return Inertia::render('Unauthorized', [
                 'logoutUrl' => $authifyUrl,
-                'message' => 'Access Restricted: You do not have permission to access the JORF.',
+                'message'   => 'Access Restricted: You do not have permission to access the JORF.',
             ])->toResponse($request)->setStatusCode(403);
         }
-        $systemRoles = [];
 
-        $userId = $currentUser->emp_id;
-        $department = $currentUser->emp_dept ?? '';
-        $jobTitle = $currentUser->emp_jobtitle ?? '';
-        // dd($department, $position);
-        if (
-            $department === 'Facilities' &&
-            stripos($jobTitle, 'Facility Engineer') === 0
-        ) {
-            $systemRoles[] = 'Facilities_Coordinator'; // or Facilities_Assigner
-        }
-        // General Facilities role
-        elseif (stripos($department, 'Facilities') !== false) {
+        $systemRoles = [];
+        $userId      = $currentUser->emp_id;
+        $department  = $currentUser->emp_dept ?? '';
+        $jobTitle    = $currentUser->emp_jobtitle ?? '';
+
+        if ($department === 'Facilities' && stripos($jobTitle, 'Facility Engineer') === 0) {
+            $systemRoles[] = 'Facilities_Coordinator';
+        } elseif (stripos($department, 'Facilities') !== false) {
             $systemRoles[] = 'Facilities';
         }
 
         $userRoles = $this->userRoleService->getRole($userId);
 
-        // if (
-        //     stripos($jobTitle, 'MIS Support Technician') !== false ||
-        //     stripos($jobTitle, 'Network Technician') !== false ||
-        //     stripos($jobTitle, 'Network') !== false
-        // ) {
-        //     $systemRoles[] = 'support';
-        // }
         // 5️⃣ Set session once
         session()->put('emp_data', [
             'token'         => $currentUser->token,
@@ -110,17 +103,22 @@ class AuthMiddleware
             'emp_prodline'  => $currentUser->emp_prodline,
             'emp_station'   => $currentUser->emp_station,
             'emp_position'  => $currentUser->emp_position,
-            'user_roles'      => $userRoles,
+            'user_roles'    => $userRoles,
             'generated_at'  => $currentUser->generated_at,
-            'system_roles'  => $systemRoles
+            'system_roles'  => $systemRoles,
         ]);
 
-        // 6️⃣ Remove token from URL after successful login
+        session()->save();
+
+        // 6️⃣ Set this system's own cookie
+        $cookie = cookie($cookieName, $currentUser->token, 60 * 24 * 7);
+
+        // 7️⃣ Remove ?key from URL after successful login
         if ($tokenFromQuery) {
-            return redirect($request->url());
+            return redirect($request->url())->withCookie($cookie);
         }
 
-        return $next($request);
+        return $next($request)->withCookie($cookie);
     }
 
     private function redirectToLogin(Request $request)

@@ -14,8 +14,8 @@ class UserRoleService
     public function __construct(UserRepository $userRepository)
     {
         $this->userRepository = $userRepository;
-        $this->baseUrl = env('INVENTORY_API_URL', 'http://127.0.0.1:8000/api');
-        $this->token = env('INVENTORY_API_TOKEN');
+        $this->baseUrl = config('services.inventory.url');
+        $this->token   = config('services.inventory.token');
     }
     protected function get(string $endpoint, array $params = [])
     {

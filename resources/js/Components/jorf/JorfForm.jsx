@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useFieldArray } from "react-hook-form";
 import {
     Form,
@@ -21,12 +21,13 @@ import {
     CheckCircle2,
     Circle,
     AlertCircle,
+    RefreshCw,
 } from "lucide-react";
 import FileUpload from "./FileUpload";
 import EmployeePicker from "./EmployeePicker";
 import { cn } from "@/lib/utils";
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+// ─── Constants ────────────────────────────────────────────────────────────────
 
 const EMPTY_ENTRY = {
     request_type: undefined,
@@ -37,6 +38,30 @@ const EMPTY_ENTRY = {
     approver_id: "",
 };
 
+const MAX_RETRIES = 3;
+const RETRY_DELAY_MS = 800;
+
+// ─── Shared retry fetcher ─────────────────────────────────────────────────────
+
+const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
+
+async function fetchWithRetry(fetchFn, retries = MAX_RETRIES) {
+    for (let attempt = 0; attempt <= retries; attempt++) {
+        try {
+            const result = await fetchFn();
+            return result;
+        } catch (err) {
+            if (attempt < retries) {
+                await sleep(RETRY_DELAY_MS * (attempt + 1)); // exponential-ish back-off
+            } else {
+                throw err;
+            }
+        }
+    }
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
 const getEntryStatus = (entry) => {
     if (!entry) return "empty";
     const filled =
@@ -44,8 +69,6 @@ const getEntryStatus = (entry) => {
         entry.location &&
         entry.request_details &&
         entry.attachments?.length > 0;
-    // entry.incharge_id &&
-    // entry.approver_id;
     const partial =
         entry.request_type ||
         entry.location ||
@@ -142,14 +165,16 @@ const EntryForm = ({
     requestType,
     locationLists,
     locationsLoading,
+    locationsError,
+    onRetryLocations,
     employees,
     employeesLoading,
+    employeesError,
+    onRetryEmployees,
 }) => {
     const [showAltIncharge, setShowAltIncharge] = useState(false);
     const [showAltApprover, setShowAltApprover] = useState(false);
     const watchedDetails = watch(`entries.${index}.request_details`);
-    const inchargeValue = watch(`entries.${index}.incharge_id`);
-    const approverValue = watch(`entries.${index}.approver_id`);
 
     return (
         <div className="space-y-5">
@@ -161,7 +186,10 @@ const EntryForm = ({
                     rules={{ required: "Please select request type" }}
                     render={({ field }) => (
                         <FormItem>
-                            <FormLabel>Request Type</FormLabel>
+                            <FormLabel className="h-5 flex items-center">
+                                Request Type
+                            </FormLabel>
+
                             <FormControl>
                                 <Combobox
                                     options={requestType.map((req) => ({
@@ -179,17 +207,26 @@ const EntryForm = ({
                         </FormItem>
                     )}
                 />
-
                 <FormField
                     control={control}
                     name={`entries.${index}.location`}
                     rules={{ required: "Please select a location" }}
                     render={({ field }) => (
                         <FormItem>
-                            <FormLabel>
+                            <FormLabel className="h-5 flex items-center">
                                 Location
                                 {locationsLoading && (
                                     <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+                                )}
+                                {locationsError && !locationsLoading && (
+                                    <button
+                                        type="button"
+                                        onClick={onRetryLocations}
+                                        className="flex items-center gap-1 text-[11px] font-medium text-destructive hover:underline"
+                                    >
+                                        <RefreshCw className="h-3 w-3" />
+                                        Retry
+                                    </button>
                                 )}
                             </FormLabel>
                             <FormControl>
@@ -200,11 +237,18 @@ const EntryForm = ({
                                     placeholder={
                                         locationsLoading
                                             ? "Loading locations…"
-                                            : "Select a location…"
+                                            : locationsError &&
+                                                locationLists.length === 0
+                                              ? "Failed to load — click Retry"
+                                              : "Select a location…"
                                     }
                                     allowCustomValue={false}
                                     className="h-9"
-                                    disabled={locationsLoading}
+                                    disabled={
+                                        locationsLoading ||
+                                        (locationsError &&
+                                            locationLists.length === 0)
+                                    }
                                 />
                             </FormControl>
                             <FormMessage />
@@ -281,6 +325,22 @@ const EntryForm = ({
                     <Loader2 className="h-3.5 w-3.5 animate-spin" />
                     Loading employees…
                 </div>
+            ) : employeesError ? (
+                // ── Error state for employees ──
+                <div className="flex items-center gap-2.5 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2.5">
+                    <AlertCircle className="h-4 w-4 shrink-0 text-destructive" />
+                    <p className="text-xs text-destructive">
+                        Failed to load employees.
+                    </p>
+                    <button
+                        type="button"
+                        onClick={onRetryEmployees}
+                        className="ml-auto flex items-center gap-1 text-xs font-medium text-destructive hover:underline"
+                    >
+                        <RefreshCw className="h-3 w-3" />
+                        Retry
+                    </button>
+                </div>
             ) : (
                 <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
                     {/* Alternate Incharge */}
@@ -290,8 +350,8 @@ const EntryForm = ({
                                 type="button"
                                 onClick={() => setShowAltIncharge(true)}
                                 className="flex w-full items-center gap-2 text-xs font-medium rounded-lg border border-dashed
-                        px-3 py-2 text-muted-foreground hover:text-primary hover:border-primary/40
-                        hover:bg-primary/5 transition-all duration-150"
+                                    px-3 py-2 text-muted-foreground hover:text-primary hover:border-primary/40
+                                    hover:bg-primary/5 transition-all duration-150"
                             >
                                 <Plus className="h-3.5 w-3.5" />
                                 Set alternate incharge
@@ -312,7 +372,7 @@ const EntryForm = ({
                                                     setShowAltIncharge(false);
                                                     setValue(
                                                         `entries.${index}.incharge_id`,
-                                                        undefined,
+                                                        null,
                                                     );
                                                 }}
                                                 className="text-[11px] text-muted-foreground hover:text-destructive transition-colors"
@@ -342,8 +402,8 @@ const EntryForm = ({
                                 type="button"
                                 onClick={() => setShowAltApprover(true)}
                                 className="flex w-full items-center gap-2 text-xs font-medium rounded-lg border border-dashed
-                        px-3 py-2 text-muted-foreground hover:text-primary hover:border-primary/40
-                        hover:bg-primary/5 transition-all duration-150"
+                                    px-3 py-2 text-muted-foreground hover:text-primary hover:border-primary/40
+                                    hover:bg-primary/5 transition-all duration-150"
                             >
                                 <Plus className="h-3.5 w-3.5" />
                                 Set alternate approver
@@ -364,7 +424,7 @@ const EntryForm = ({
                                                     setShowAltApprover(false);
                                                     setValue(
                                                         `entries.${index}.approver_id`,
-                                                        undefined,
+                                                        null,
                                                     );
                                                 }}
                                                 className="text-[11px] text-muted-foreground hover:text-destructive transition-colors"
@@ -400,8 +460,11 @@ const JorfForm = ({ emp_data, form, requestType, submitting, onSubmit }) => {
 
     const [locationLists, setLocationLists] = useState([]);
     const [locationsLoading, setLocationsLoading] = useState(true);
+    const [locationsError, setLocationsError] = useState(false);
+
     const [employees, setEmployees] = useState([]);
     const [employeesLoading, setEmployeesLoading] = useState(true);
+    const [employeesError, setEmployeesError] = useState(false);
 
     const { fields, append, remove } = useFieldArray({
         control,
@@ -409,43 +472,60 @@ const JorfForm = ({ emp_data, form, requestType, submitting, onSubmit }) => {
     });
     const allEntries = watch("entries");
 
+    // ── Locations fetch ────────────────────────────────────────────────────────
+    const fetchLocationLists = useCallback(async () => {
+        setLocationsLoading(true);
+        setLocationsError(false);
+        try {
+            const res = await fetchWithRetry(() =>
+                axios.get(route("locations.list")),
+            );
+            const locations = res.data?.locations ?? [];
+
+            setLocationLists(
+                locations.map((loc) => ({
+                    label: loc.location_name,
+                    value: loc.location_name,
+                })),
+            );
+        } catch (err) {
+            console.error("Error fetching locations:", err);
+            setLocationsError(true);
+        } finally {
+            setLocationsLoading(false);
+        }
+    }, []);
+
+    // ── Employees fetch ────────────────────────────────────────────────────────
+
+    const fetchEmployees = useCallback(async () => {
+        setEmployeesLoading(true);
+        setEmployeesError(false);
+        try {
+            const res = await fetchWithRetry(() =>
+                axios.get(route("users.available-approvers-requestors"), {
+                    params: { emp_id: emp_data?.emp_id },
+                }),
+            );
+            const list = res.data.employees ?? [];
+            if (!list.length) throw new Error("Empty employees response");
+            setEmployees(list);
+        } catch (err) {
+            console.error("Error fetching employees:", err);
+            setEmployeesError(true);
+        } finally {
+            setEmployeesLoading(false);
+        }
+    }, [emp_data?.emp_id]);
+
+    // ── Initial load ───────────────────────────────────────────────────────────
+
     useEffect(() => {
-        const fetchLocationLists = async () => {
-            try {
-                const res = await axios.get(route("locations.list"));
-                const locations = res.data.locations;
-                setLocationLists(
-                    locations.map((loc) => ({
-                        label: loc.location_name,
-                        value: loc.location_name,
-                    })),
-                );
-            } catch (err) {
-                console.error("Error fetching locations:", err);
-            } finally {
-                setLocationsLoading(false);
-            }
-        };
-
-        const fetchEmployees = async () => {
-            try {
-                const res = await axios.get(
-                    route("users.available-approvers-requestors"),
-                    {
-                        params: { emp_id: emp_data?.emp_id },
-                    },
-                );
-                setEmployees(res.data.employees || []);
-            } catch (err) {
-                console.error("Error fetching employees:", err);
-            } finally {
-                setEmployeesLoading(false);
-            }
-        };
-
         fetchLocationLists();
         fetchEmployees();
-    }, []);
+    }, [fetchLocationLists, fetchEmployees]);
+
+    // ── Handlers ───────────────────────────────────────────────────────────────
 
     const handleRemove = (index) => {
         remove(index);
@@ -461,6 +541,8 @@ const JorfForm = ({ emp_data, form, requestType, submitting, onSubmit }) => {
 
     const completedCount =
         allEntries?.filter((e) => getEntryStatus(e) === "complete").length ?? 0;
+
+    const isLoading = locationsLoading || employeesLoading;
 
     return (
         <Form {...form}>
@@ -534,8 +616,12 @@ const JorfForm = ({ emp_data, form, requestType, submitting, onSubmit }) => {
                             requestType={requestType}
                             locationLists={locationLists}
                             locationsLoading={locationsLoading}
+                            locationsError={locationsError}
+                            onRetryLocations={fetchLocationLists}
                             employees={employees}
                             employeesLoading={employeesLoading}
+                            employeesError={employeesError}
+                            onRetryEmployees={fetchEmployees}
                         />
                     </div>
                 </div>
@@ -558,9 +644,7 @@ const JorfForm = ({ emp_data, form, requestType, submitting, onSubmit }) => {
                         type="submit"
                         size="lg"
                         className="min-w-40 gap-2"
-                        disabled={
-                            submitting || locationsLoading || employeesLoading
-                        }
+                        disabled={submitting || isLoading}
                     >
                         {submitting ? (
                             <>

@@ -3,29 +3,31 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 
 class AuthenticationController extends Controller
 {
-
-
     public function logout(Request $request)
     {
-        $token = $request->cookie('sso_token')
+        $cookieName = env('SSO_COOKIE_NAME', 'sso_token');
+
+        // Get token from this system's own cookie or session
+        $token = $request->cookie($cookieName)
             ?? session('emp_data.token');
 
         // Clear local Laravel session
         session()->forget('emp_data');
         session()->flush();
-
         $request->session()->invalidate();
         $request->session()->regenerateToken();
 
-        // Build redirect back after SSO logout
+        // Clear this system's own cookie only — does NOT affect other systems
+        $expiredCookie = cookie()->forget($cookieName);
+
+        // Redirect to Authify to delete the DB token, then come back to login
         $redirectUrl = urlencode(route('dashboard'));
 
         return redirect(
             "http://192.168.1.27:8080/authify/public/logout?token={$token}&redirect={$redirectUrl}"
-        );
+        )->withCookie($expiredCookie);
     }
 }

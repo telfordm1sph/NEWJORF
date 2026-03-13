@@ -16,12 +16,13 @@ class JorfService
 {
     protected JorfRepository $jorfRepository;
     protected UserRepository $userRepo;
+protected NotificationService $notificationService; 
 
-
-    public function __construct(JorfRepository $jorfRepository, UserRepository $userRepo,)
+    public function __construct(JorfRepository $jorfRepository, UserRepository $userRepo, NotificationService $notificationService)
     {
         $this->jorfRepository = $jorfRepository;
         $this->userRepo = $userRepo;
+        $this->notificationService = $notificationService;
     }
 
     public function getRequestType()
@@ -96,15 +97,23 @@ class JorfService
         // ── Phase 2: Insert everything in one DB transaction ─────────────────────
         // If anything fails here, we roll back the DB AND delete uploaded files.
         try {
-            DB::transaction(function () use ($preparedEntries) {
-                foreach ($preparedEntries as $prepared) {
-                    $this->jorfRepository->createJorf($prepared['jorf']);
+          DB::transaction(function () use ($preparedEntries, $employeeData) {
+    foreach ($preparedEntries as $prepared) {
+        $jorf = $this->jorfRepository->createJorf($prepared['jorf']); 
 
-                    foreach ($prepared['attachments'] as $attachment) {
-                        $this->jorfRepository->createAttachment($attachment);
-                    }
-                }
-            });
+        $this->notificationService->notifyJorfAction(
+            $jorf,
+            'Created',
+            ['emp_id' => $employeeData['employid'], 'name' => $employeeData['empname']],
+            $employeeData,
+            ['DEPT_HEAD']
+        );
+
+        foreach ($prepared['attachments'] as $attachment) {
+            $this->jorfRepository->createAttachment($attachment);
+        }
+    }
+});
         } catch (\Throwable $e) {
             // DB failed — delete all files that were already uploaded
             foreach ($uploadedPaths as $path) {
@@ -636,7 +645,7 @@ class JorfService
                 'name'   => $actorUser->empname ?? 'Unknown',
             ];
 
-            // $this->notificationService->notifyJorfAction($jorf, $actionType, $actorData);
+            $this->notificationService->notifyJorfAction($jorf, $actionType, $actorData);
 
             return true;
         });

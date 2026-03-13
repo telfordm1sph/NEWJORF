@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { ChevronDown, User, LogOut, Loader2, Sun, Moon } from "lucide-react";
-
+import NotificationBell from "./NotificationBell";
 export default function NavBar() {
     const { emp_data } = usePage().props;
     const { theme, toggleTheme } = useContext(ThemeContext);
@@ -44,6 +44,7 @@ export default function NavBar() {
         <nav className="sticky top-0 z-50 bg-background/70 backdrop-blur-md border-b border-border/40 shadow-sm">
             <div className="px-4 sm:px-6 lg:px-8">
                 <div className="flex items-center justify-end h-[54px] gap-2">
+                    <NotificationBell />
                     {/* ── Theme Toggle Pill ── */}
                     <button
                         onClick={toggleTheme}
