@@ -38,6 +38,7 @@ class HandleInertiaRequests extends Middleware
             ],
             'auth' => [
                 'user' => $request->user(),
+                  'idle_timeout_minutes' => (int) env('IDLE_TIMEOUT_MINUTES', 30),
             ],
           'appName' => config('app.name'), 
             'display_name' => config('app.name', ''),

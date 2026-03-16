@@ -4,10 +4,11 @@ namespace App\Http\Middleware;
 
 use App\Services\UserRoleService;
 use Closure;
+use Firebase\JWT\JWT;
+use Firebase\JWT\Key;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
+use Symfony\Component\HttpFoundation\Cookie as SymfonyCookie;
 
 class AuthMiddleware
 {
@@ -20,69 +21,73 @@ class AuthMiddleware
 
     public function handle(Request $request, Closure $next)
     {
-        $cookieName = env('SSO_COOKIE_NAME', 'sso_token');
+        $cookieName = env('SSO_COOKIE_NAME', 'authify_suite_sso');
+        $secure     = (bool) env('SESSION_SECURE_COOKIE', false);
 
-        // 1️⃣ Get token sources (priority: query → cookie → session)
         $tokenFromQuery   = $request->query('key');
         $tokenFromCookie  = $request->cookie($cookieName);
         $tokenFromSession = session('emp_data.token');
 
         $token = $tokenFromQuery ?? $tokenFromCookie ?? $tokenFromSession;
 
-        Log::info('AuthMiddleware token check', [
-            'query'   => $tokenFromQuery,
-            'cookie'  => $tokenFromCookie,
-            'session' => $tokenFromSession,
-            'used'    => $token,
-        ]);
-
-        // 2️⃣ No token at all → redirect
         if (!$token) {
             return $this->redirectToLogin($request);
         }
 
-        // 3️⃣ Session already exists AND token matches → verify DB then trust it
+        // Session valid and token matches — skip decode entirely
         if (session()->has('emp_data') && session('emp_data.token') === $token) {
-            // Clean URL if token came from query
             if ($tokenFromQuery) {
-                $cookie = cookie($cookieName, $token, 60 * 24 * 7);
-                return redirect($request->url())->withCookie($cookie);
+                return redirect($request->fullUrlWithoutQuery(['key']))
+                    ->withCookie($this->makeCookie($cookieName, $token, $secure));
             }
-
             return $next($request);
         }
 
-        // 4️⃣ ONLY HERE we hit the DB (session missing or token mismatch)
-        $currentUser = DB::connection('authify')
-            ->table('authify_sessions')
-            ->where('token', $token)
-            ->first();
+        // Decode JWT
+        try {
+            $secret = env('JWT_SECRET');
+            if (empty($secret)) {
+                return $this->redirectToLogin($request);
+            }
 
-        if (!$currentUser) {
+            $decoded = (array) JWT::decode(
+                $token,
+                new Key($secret, 'HS256')
+            );
+        } catch (\Firebase\JWT\ExpiredException $e) {
             session()->forget('emp_data');
-            // Clear this system's own cookie only
-            $expiredCookie = cookie()->forget($cookieName);
-            return $this->redirectToLogin($request)->withCookie($expiredCookie);
+            return $this->redirectToLogin($request)
+                ->withCookie($this->forgetCookie($cookieName, $secure));
+        } catch (\Exception $e) {
+            session()->forget('emp_data');
+            return $this->redirectToLogin($request)
+                ->withCookie($this->forgetCookie($cookieName, $secure));
         }
 
-        $canAccess = $currentUser->emp_position >= 2
-            || stripos($currentUser->emp_dept, 'Facilities') !== false;
+        if (empty($decoded['emp_id'])) {
+            session()->forget('emp_data');
+            return $this->redirectToLogin($request)
+                ->withCookie($this->forgetCookie($cookieName, $secure));
+        }
+
+        // Access control
+        $canAccess = ($decoded['emp_position'] ?? 0) >= 2
+            || stripos($decoded['emp_dept'] ?? '', 'Facilities') !== false;
 
         if (!$canAccess) {
             session()->forget('emp_data');
-            session()->flush();
             $redirectUrl = urlencode(route('dashboard'));
-            $authifyUrl  = "http://192.168.1.27:8080/authify/public/logout?token={$token}&redirect={$redirectUrl}";
+            $authifyUrl  = env('AUTHIFY_URL') . "/logout?redirect={$redirectUrl}";
             return Inertia::render('Unauthorized', [
                 'logoutUrl' => $authifyUrl,
-                'message'   => 'Access Restricted: You do not have permission to access the JORF.',
+                'message'   => 'Access Restricted.',
             ])->toResponse($request)->setStatusCode(403);
         }
 
+        // Build system roles
         $systemRoles = [];
-        $userId      = $currentUser->emp_id;
-        $department  = $currentUser->emp_dept ?? '';
-        $jobTitle    = $currentUser->emp_jobtitle ?? '';
+        $department  = $decoded['emp_dept'] ?? '';
+        $jobTitle    = $decoded['emp_jobtitle'] ?? '';
 
         if ($department === 'Facilities' && stripos($jobTitle, 'Facility Engineer') === 0) {
             $systemRoles[] = 'Facilities_Coordinator';
@@ -90,40 +95,70 @@ class AuthMiddleware
             $systemRoles[] = 'Facilities';
         }
 
-        $userRoles = $this->userRoleService->getRole($userId);
+        $userRoles = $this->userRoleService->getRole($decoded['emp_id']);
 
-        // 5️⃣ Set session once
         session()->put('emp_data', [
-            'token'         => $currentUser->token,
-            'emp_id'        => $currentUser->emp_id,
-            'emp_name'      => $currentUser->emp_name,
-            'emp_firstname' => $currentUser->emp_firstname,
-            'emp_jobtitle'  => $currentUser->emp_jobtitle,
-            'emp_dept'      => $currentUser->emp_dept,
-            'emp_prodline'  => $currentUser->emp_prodline,
-            'emp_station'   => $currentUser->emp_station,
-            'emp_position'  => $currentUser->emp_position,
+            'token'         => $token,
+            'emp_id'        => $decoded['emp_id'],
+            'emp_name'      => $decoded['emp_name'],
+            'emp_firstname' => $decoded['emp_firstname'],
+            'emp_jobtitle'  => $decoded['emp_jobtitle'],
+            'emp_dept'      => $decoded['emp_dept'],
+            'emp_prodline'  => $decoded['emp_prodline'],
+            'emp_station'   => $decoded['emp_station'],
+            'emp_position'  => $decoded['emp_position'],
+            'emp_from'      => $decoded['emp_from'] ?? 'Employee',
             'user_roles'    => $userRoles,
-            'generated_at'  => $currentUser->generated_at,
             'system_roles'  => $systemRoles,
+            'generated_at'  => date('Y-m-d H:i:s', $decoded['iat']),
         ]);
 
         session()->save();
 
-        // 6️⃣ Set this system's own cookie
-        $cookie = cookie($cookieName, $currentUser->token, 60 * 24 * 7);
+        $cookie = $this->makeCookie($cookieName, $token, $secure);
 
-        // 7️⃣ Remove ?key from URL after successful login
         if ($tokenFromQuery) {
-            return redirect($request->url())->withCookie($cookie);
+            return redirect($request->fullUrlWithoutQuery(['key']))
+                ->withCookie($cookie);
         }
 
         return $next($request)->withCookie($cookie);
     }
 
+    private function makeCookie(string $name, string $value, bool $secure): SymfonyCookie
+    {
+        return SymfonyCookie::create(
+            $name,
+            $value,
+            now()->addDays(7),
+            '/',
+            null,
+            $secure,
+            true,   // httpOnly
+            false,
+            'lax'
+        );
+    }
+
+    private function forgetCookie(string $name, bool $secure): SymfonyCookie
+    {
+        return SymfonyCookie::create(
+            $name, '', 1, '/', null,
+            $secure,  // must match makeCookie exactly
+            true, false, 'lax'
+        );
+    }
+
     private function redirectToLogin(Request $request)
     {
         $redirectUrl = urlencode($request->fullUrl());
-        return redirect("http://192.168.1.27:8080/authify/public/login?redirect={$redirectUrl}");
+        $loginUrl    = env('AUTHIFY_URL') . "/login?redirect={$redirectUrl}";
+
+        if ($request->header('X-Inertia')) {
+            return response()->json(['message' => 'Unauthenticated'], 409)
+                ->header('X-Inertia-Location', $loginUrl);
+        }
+
+        return redirect($loginUrl);
     }
 }

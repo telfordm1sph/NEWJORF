@@ -3,31 +3,39 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
+use Symfony\Component\HttpFoundation\Cookie as SymfonyCookie;
 
 class AuthenticationController extends Controller
 {
     public function logout(Request $request)
     {
-        $cookieName = env('SSO_COOKIE_NAME', 'sso_token');
+        $cookieName     = env('SSO_COOKIE_NAME', 'authify_suite_sso');
+        $sessionName    = env('SESSION_COOKIE', 'authify_suite_session');
+        $secure         = (bool) env('SESSION_SECURE_COOKIE', false);
 
-        // Get token from this system's own cookie or session
-        $token = $request->cookie($cookieName)
-            ?? session('emp_data.token');
+        $redirectUrl    = urlencode(rtrim(env('APP_URL'), '/'));
+        $authifyUrl     = env('AUTHIFY_URL') . '/logout?redirect=' . $redirectUrl;
 
-        // Clear local Laravel session
+        // Fully destroy the server-side session
         session()->forget('emp_data');
         session()->flush();
-        $request->session()->invalidate();
-        $request->session()->regenerateToken();
+        session()->invalidate();
+        session()->regenerateToken();
 
-        // Clear this system's own cookie only — does NOT affect other systems
-        $expiredCookie = cookie()->forget($cookieName);
+        return redirect($authifyUrl)
+            ->withCookie($this->forgetCookie($cookieName, $secure))
+            ->withCookie($this->forgetCookie($sessionName, $secure))
+            ->withCookie($this->forgetCookie('XSRF-TOKEN', false));
+    }
 
-        // Redirect to Authify to delete the DB token, then come back to login
-        $redirectUrl = urlencode(route('dashboard'));
-
-        return redirect(
-            "http://192.168.1.27:8080/authify/public/logout?token={$token}&redirect={$redirectUrl}"
-        )->withCookie($expiredCookie);
+    private function forgetCookie(string $name, bool $secure = false): SymfonyCookie
+    {
+        return SymfonyCookie::create(
+            $name, '', 1, '/', null,
+            $secure,
+            false,  // httpOnly false so browser can clear it
+            false,
+            'lax'
+        );
     }
 }
