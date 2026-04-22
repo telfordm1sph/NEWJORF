@@ -11,14 +11,14 @@ import {
 } from "chart.js";
 import { Bar } from "react-chartjs-2";
 
-// Register Chart.js components
+// Register Chart.js Components
 ChartJS.register(
     CategoryScale,
     LinearScale,
     BarElement,
     Title,
     Tooltip,
-    Legend
+    Legend,
 );
 
 // Chart configuration

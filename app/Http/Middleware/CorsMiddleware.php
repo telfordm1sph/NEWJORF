@@ -11,7 +11,7 @@ class CorsMiddleware
     {
         // ✅ Only apply CORS if there's a different Origin
         $origin = $request->headers->get('Origin');
-             $allowedOrigin = 'https://192.168.2.221:90';
+             $allowedOrigin = 'http://192.168.2.221:8191';
 
         // Skip CORS for same-origin or no origin
         if (!$origin || $origin === $allowedOrigin) {

@@ -2,8 +2,8 @@ import { Link, usePage } from "@inertiajs/react";
 import { useState, useEffect } from "react";
 import Navigation from "@/Components/sidebar/Navigation";
 import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
-import { TooltipProvider } from "@/components/ui/tooltip";
+import { Button } from "@/Components/ui/button";
+import { TooltipProvider } from "@/Components/ui/tooltip";
 import {
     Menu,
     X,
@@ -59,7 +59,7 @@ export default function Sidebar() {
                     className={cn(
                         "fixed md:relative top-0 left-0 z-50 flex flex-col min-h-screen",
                         "transition-all duration-300 ease-in-out",
-                        "bg-card border-r border-border",
+                        "bg-card shadow-lg",
                         isSidebarOpen ? "w-64" : "w-[68px]",
                         isMobileSidebarOpen
                             ? "translate-x-0"
@@ -99,7 +99,7 @@ export default function Sidebar() {
                     {/* ── Logo ── */}
                     <div
                         className={cn(
-                            "flex items-center h-14 border-b border-border",
+                            "flex items-center h-14 shadow-lg",
                             isSidebarOpen ? "px-4" : "px-0 justify-center",
                         )}
                     >

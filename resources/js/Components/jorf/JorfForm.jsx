@@ -7,12 +7,12 @@ import {
     FormItem,
     FormLabel,
     FormMessage,
-} from "@/components/ui/form";
-import { Combobox } from "@/Components/ui/Combobox";
-import { Textarea } from "@/components/ui/textarea";
-import { Separator } from "@/components/ui/separator";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+} from "@/Components/ui/form";
+import { Combobox } from "@/Components/ui/combobox";
+import { Textarea } from "@/Components/ui/textarea";
+import { Separator } from "@/Components/ui/separator";
+import { Button } from "@/Components/ui/button";
+import { Badge } from "@/Components/ui/badge";
 import {
     Loader2,
     Send,

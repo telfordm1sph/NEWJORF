@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from "react";
-import { Combobox } from "@/Components/ui/Combobox";
-import { Button } from "@/components/ui/button";
+import { Combobox } from "@/Components/ui/combobox";
+import { Button } from "@/Components/ui/button";
 import { X } from "lucide-react";
 
 /**

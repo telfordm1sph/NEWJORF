@@ -4,8 +4,8 @@ import { Head, router, usePage } from "@inertiajs/react";
 import { useForm, Controller } from "react-hook-form";
 import { CheckCircle2, PlusIcon, Trash2Icon, XCircle } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/Components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/Components/ui/card";
 import {
     Table,
     TableBody,
@@ -13,17 +13,17 @@ import {
     TableHead,
     TableHeader,
     TableRow,
-} from "@/components/ui/table";
+} from "@/Components/ui/table";
 import {
     Sheet,
     SheetContent,
     SheetHeader,
     SheetTitle,
-} from "@/components/ui/sheet";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
-import { Badge } from "@/components/ui/badge";
+} from "@/Components/ui/sheet";
+import { Input } from "@/Components/ui/input";
+import { Label } from "@/Components/ui/label";
+import { Switch } from "@/Components/ui/switch";
+import { Badge } from "@/Components/ui/badge";
 import {
     AlertDialog,
     AlertDialogAction,
@@ -34,7 +34,7 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
     AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
+} from "@/Components/ui/alert-dialog";
 import { toast } from "sonner";
 import { useRequestTypeDrawer } from "@/Hooks/useRequestTypeDrawer";
 

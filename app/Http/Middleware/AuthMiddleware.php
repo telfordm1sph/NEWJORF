@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Models\AdditionalUser;
 use App\Services\UserRoleService;
 use Closure;
 use Illuminate\Http\Request;
@@ -41,9 +42,8 @@ class AuthMiddleware
             return $this->redirectToLogin($request);
         }
 
-        // 3️⃣ Session already exists AND token matches → verify DB then trust it
+        // 3️⃣ Session already exists AND token matches → trust it
         if (session()->has('emp_data') && session('emp_data.token') === $token) {
-            // Clean URL if token came from query
             if ($tokenFromQuery) {
                 $cookie = cookie($cookieName, $token, 60 * 24 * 7);
                 return redirect($request->url())->withCookie($cookie);
@@ -60,19 +60,21 @@ class AuthMiddleware
 
         if (!$currentUser) {
             session()->forget('emp_data');
-            // Clear this system's own cookie only
             $expiredCookie = cookie()->forget($cookieName);
             return $this->redirectToLogin($request)->withCookie($expiredCookie);
         }
 
+        $isAdditionalUser = AdditionalUser::where('employid', $currentUser->emp_id)->exists();
+
         $canAccess = $currentUser->emp_position >= 2
-            || stripos($currentUser->emp_dept, 'Facilities') !== false;
+            || stripos($currentUser->emp_dept, 'Facilities') !== false
+            || $isAdditionalUser;
 
         if (!$canAccess) {
             session()->forget('emp_data');
             session()->flush();
             $redirectUrl = urlencode(route('dashboard'));
-            $authifyUrl  = "http://192.168.1.27:8080/authify/public/logout?token={$token}&redirect={$redirectUrl}";
+            $authifyUrl  = "http://192.168.2.221:8200/logout?token={$token}&redirect={$redirectUrl}";
             return Inertia::render('Unauthorized', [
                 'logoutUrl' => $authifyUrl,
                 'message'   => 'Access Restricted: You do not have permission to access the JORF.',
@@ -94,18 +96,19 @@ class AuthMiddleware
 
         // 5️⃣ Set session once
         session()->put('emp_data', [
-            'token'         => $currentUser->token,
-            'emp_id'        => $currentUser->emp_id,
-            'emp_name'      => $currentUser->emp_name,
-            'emp_firstname' => $currentUser->emp_firstname,
-            'emp_jobtitle'  => $currentUser->emp_jobtitle,
-            'emp_dept'      => $currentUser->emp_dept,
-            'emp_prodline'  => $currentUser->emp_prodline,
-            'emp_station'   => $currentUser->emp_station,
-            'emp_position'  => $currentUser->emp_position,
-            'user_roles'    => $userRoles,
-            'generated_at'  => $currentUser->generated_at,
-            'system_roles'  => $systemRoles,
+            'token'              => $currentUser->token,
+            'emp_id'             => $currentUser->emp_id,
+            'emp_name'           => $currentUser->emp_name,
+            'emp_firstname'      => $currentUser->emp_firstname,
+            'emp_jobtitle'       => $currentUser->emp_jobtitle,
+            'emp_dept'           => $currentUser->emp_dept,
+            'emp_prodline'       => $currentUser->emp_prodline,
+            'emp_station'        => $currentUser->emp_station,
+            'emp_position'       => $currentUser->emp_position,
+            'user_roles'         => $userRoles,
+            'generated_at'       => $currentUser->generated_at,
+            'system_roles'       => $systemRoles,
+            'is_additional_user' => $isAdditionalUser,
         ]);
 
         session()->save();
@@ -124,6 +127,6 @@ class AuthMiddleware
     private function redirectToLogin(Request $request)
     {
         $redirectUrl = urlencode($request->fullUrl());
-        return redirect("http://192.168.1.27:8080/authify/public/login?redirect={$redirectUrl}");
+        return redirect("http://192.168.2.221:8200/login?redirect={$redirectUrl}");
     }
 }

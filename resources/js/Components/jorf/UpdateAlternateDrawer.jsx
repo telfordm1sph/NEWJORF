@@ -16,11 +16,11 @@ import {
     SheetContent,
     SheetHeader,
     SheetTitle,
-} from "@/components/ui/sheet";
-import { Button } from "@/components/ui/button";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Separator } from "@/components/ui/separator";
-import { Badge } from "@/components/ui/badge";
+} from "@/Components/ui/sheet";
+import { Button } from "@/Components/ui/button";
+import { ScrollArea } from "@/Components/ui/scroll-area";
+import { Separator } from "@/Components/ui/separator";
+import { Badge } from "@/Components/ui/badge";
 import { cn } from "@/lib/utils";
 import EmployeePicker from "./EmployeePicker";
 import { COLOR_CLASS_MAP } from "@/Utils/colorClasses";

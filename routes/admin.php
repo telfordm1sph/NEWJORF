@@ -1,6 +1,6 @@
 <?php
 
-use App\Http\Controllers\RequestorLIstController;
+use App\Http\Controllers\RequestorListController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\RequestTypeController;
 
@@ -18,7 +18,7 @@ Route::prefix($app_name)
         Route::put('/requestTypes/{id}', [RequestTypeController::class, 'update'])->name('request-types.update');
         Route::delete('/requestTypes/{id}', [RequestTypeController::class, 'destroy'])->name('request-types.destroy');
 
-        Route::get('/requestor', [RequestorLIstController::class, 'index'])->name('requestor.form');
-        Route::post('/requestor', [RequestorLIstController::class, 'store'])->name('requestor.store');
-        Route::delete('/requestor/{id}', [RequestorLIstController::class, 'destroy'])->name('requestor.destroy');
+        Route::get('/requestor', [RequestorListController::class, 'index'])->name('requestor.form');
+        Route::post('/requestor', [RequestorListController::class, 'store'])->name('requestor.store');
+        Route::delete('/requestor/{id}', [RequestorListController::class, 'destroy'])->name('requestor.destroy');
     });

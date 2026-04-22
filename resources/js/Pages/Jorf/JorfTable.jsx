@@ -19,8 +19,8 @@ import {
     XCircle,
 } from "lucide-react";
 
-import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+import { Card } from "@/Components/ui/card";
+import { Input } from "@/Components/ui/input";
 import {
     Table,
     TableBody,
@@ -28,14 +28,14 @@ import {
     TableHead,
     TableHeader,
     TableRow,
-} from "@/components/ui/table";
+} from "@/Components/ui/table";
 import {
     DropdownMenu,
     DropdownMenuContent,
     DropdownMenuItem,
     DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Button } from "@/components/ui/button";
+} from "@/Components/ui/dropdown-menu";
+import { Button } from "@/Components/ui/button";
 import { cn } from "@/lib/utils";
 
 import useJorfTable from "@/Hooks/useJorfTable";

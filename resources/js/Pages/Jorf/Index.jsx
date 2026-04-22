@@ -12,10 +12,10 @@ import {
     CardHeader,
     CardTitle,
     CardDescription,
-} from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
+} from "@/Components/ui/card";
+import { Separator } from "@/Components/ui/separator";
 
-// Local components
+// Local Components
 import PageHeader from "@/Components/jorf/PageHeader";
 import EmployeeInfo from "@/Components/jorf/EmployeeInfo";
 import JorfForm from "@/Components/jorf/JorfForm";

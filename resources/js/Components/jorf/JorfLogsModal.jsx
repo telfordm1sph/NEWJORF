@@ -9,14 +9,14 @@ import {
     ChevronDown,
 } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { Button } from "@/Components/ui/button";
+import { ScrollArea } from "@/Components/ui/scroll-area";
 import {
     Dialog,
     DialogContent,
     DialogHeader,
     DialogTitle,
-} from "@/components/ui/dialog";
+} from "@/Components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { COLOR_CLASS_MAP, DOT_COLOR_MAP } from "@/Utils/colorClasses";
 

@@ -1,7 +1,7 @@
 import React, { useState } from "react";
-import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
-import { Button } from "@/components/ui/button";
+import { Badge } from "@/Components/ui/badge";
+import { Separator } from "@/Components/ui/separator";
+import { Button } from "@/Components/ui/button";
 import {
     User,
     Hash,
