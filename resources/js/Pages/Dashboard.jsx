@@ -89,6 +89,10 @@ const monthlyConfig = {
     count: { label: "Requests", color: "hsl(var(--chart-1))" },
 };
 
+const departmentConfig = {
+    count: { label: "Requests", color: "hsl(var(--chart-2))" },
+};
+
 export default function Dashboard({
     statusCounts,
     monthlyTrends,
@@ -112,9 +116,15 @@ export default function Dashboard({
         month,
         count,
     }));
+
     const requestTypeData = Object.entries(requestTypeCounts).map(
         ([type, count]) => ({ type, count }),
     );
+
+    const departmentData = Object.entries(departmentCounts).map(
+        ([dept, count]) => ({ dept, count }),
+    );
+
     const statusData = Object.entries(statusCounts)
         .filter(([key]) => key !== "All")
         .map(([label, count]) => ({ label, count }));
@@ -265,7 +275,8 @@ export default function Dashboard({
                         </CardContent>
                     </Card>
                 </div>
-                {/* Requests by Type + By Department */}
+
+                {/* Requests by Type + Requests by Department */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <Card>
                         <CardHeader>
@@ -388,88 +399,6 @@ export default function Dashboard({
                         </div>
                     </CardContent>
                 </Card>
-
-                {/* Requests by Type + Recent JORFs */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Requests by Type</CardTitle>
-                            <CardDescription>
-                                Distribution of JORF request types
-                            </CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                            <ChartContainer
-                                config={requestTypeConfig}
-                                className="h-[220px] w-full"
-                            >
-                                <BarChart data={requestTypeData}>
-                                    <CartesianGrid vertical={false} />
-                                    <XAxis
-                                        dataKey="type"
-                                        tick={{ fontSize: 11 }}
-                                        tickLine={false}
-                                        axisLine={false}
-                                    />
-                                    <YAxis
-                                        allowDecimals={false}
-                                        tickLine={false}
-                                        axisLine={false}
-                                    />
-                                    <ChartTooltip
-                                        content={<ChartTooltipContent />}
-                                    />
-                                    <Bar dataKey="count" radius={[4, 4, 0, 0]}>
-                                        {requestTypeData.map(({ type }, i) => (
-                                            <Cell
-                                                key={type}
-                                                fill={
-                                                    CHART_COLORS[
-                                                        i % CHART_COLORS.length
-                                                    ]
-                                                }
-                                            />
-                                        ))}
-                                    </Bar>
-                                </BarChart>
-                            </ChartContainer>
-                        </CardContent>
-                    </Card>
-
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Recent JORFs</CardTitle>
-                            <CardDescription>
-                                Latest JORF requests
-                            </CardDescription>
-                        </CardHeader>
-                        <CardContent className="p-0">
-                            <div className="divide-y">
-                                {recentJorfs.map((jorf) => (
-                                    <div
-                                        key={jorf.id}
-                                        className="flex items-center justify-between px-6 py-4"
-                                    >
-                                        <div>
-                                            <p className="font-semibold text-sm">
-                                                {jorf.jorf_id}
-                                            </p>
-                                            <p className="text-xs text-muted-foreground mt-0.5">
-                                                {jorf.empname} •{" "}
-                                                {jorf.department}
-                                            </p>
-                                        </div>
-                                        <span
-                                            className={`px-3 py-1 rounded-full text-xs font-medium shrink-0 ${STATUS_BADGE_COLORS[jorf.status_label] ?? "bg-gray-100 text-gray-700"}`}
-                                        >
-                                            {jorf.status_label}
-                                        </span>
-                                    </div>
-                                ))}
-                            </div>
-                        </CardContent>
-                    </Card>
-                </div>
             </div>
         </AuthenticatedLayout>
     );
