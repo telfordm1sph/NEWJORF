@@ -24,7 +24,7 @@ const EmployeePicker = ({
     disabled,
 }) => {
     const [dept, setDept] = useState("");
-    const [prodline, setProdline] = useState("");
+    const [prodline, setProdLine] = useState("");
     const [station, setStation] = useState("");
 
     // ── Cascading options ─────────────────────────────────────────────────────
@@ -79,13 +79,13 @@ const EmployeePicker = ({
 
     const handleDeptChange = (val) => {
         setDept(val ?? "");
-        setProdline("");
+        setProdLine("");
         setStation("");
         onChange(undefined);
     };
 
-    const handleProdlineChange = (val) => {
-        setProdline(val ?? "");
+    const handleProdLineChange = (val) => {
+        setProdLine(val ?? "");
         setStation("");
         onChange(undefined);
     };
@@ -97,7 +97,7 @@ const EmployeePicker = ({
 
     const handleClear = () => {
         setDept("");
-        setProdline("");
+        setProdLine("");
         setStation("");
         onChange(undefined);
     };
@@ -129,7 +129,7 @@ const EmployeePicker = ({
                 )}
             </div>
 
-            {/* Dept → Prodline → Station filters */}
+            {/* Dept → ProdLine → Station filters */}
             <div className="grid grid-cols-3 gap-2">
                 <div className="space-y-1">
                     <p className="text-[11px] font-medium text-muted-foreground">
@@ -153,7 +153,7 @@ const EmployeePicker = ({
                     <Combobox
                         options={prodlineOptions}
                         value={prodline}
-                        onChange={handleProdlineChange}
+                        onChange={handleProdLineChange}
                         placeholder="All"
                         allowCustomValue={false}
                         disabled={disabled || !dept}
