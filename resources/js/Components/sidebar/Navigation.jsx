@@ -1,6 +1,12 @@
 import { usePage } from "@inertiajs/react";
 import SidebarLink from "@/Components/sidebar/SidebarLink";
-import { ClipboardList, FileText, Settings, SheetIcon } from "lucide-react";
+import {
+    ClipboardList,
+    FileText,
+    Settings,
+    SheetIcon,
+    LayoutDashboard,
+} from "lucide-react";
 import Dropdown from "./DropDown";
 import { UserAddOutlined } from "@ant-design/icons";
 
@@ -23,6 +29,14 @@ export default function NavLinks({ isSidebarOpen }) {
     ];
     return (
         <nav className="flex flex-col gap-0.5">
+            {emp_data?.system_roles?.includes("Facilities_Coordinator") && (
+                <SidebarLink
+                    href={route("dashboard")}
+                    label="Dashboard"
+                    icon={<LayoutDashboard className="w-5 h-5" />}
+                    isSidebarOpen={isSidebarOpen}
+                />
+            )}
             <SidebarLink
                 href={route("jorf.form")}
                 icon={<FileText className="w-[18px] h-[18px]" />}

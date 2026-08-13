@@ -484,9 +484,9 @@ const JorfForm = ({ emp_data, form, requestType, submitting, onSubmit }) => {
 
             setLocationLists(
                 locations.map((loc) => ({
-                    label: loc.location_name,
-                    value: loc.location_name,
-                })),
+                    label: String(loc.location_name).trim(),
+                    value: String(loc.location_name).trim(),
+                }))
             );
         } catch (err) {
             console.error("Error fetching locations:", err);
